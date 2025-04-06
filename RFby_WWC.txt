@@ -1,0 +1,112 @@
+def writeListTxt(filePath, lines):
+    """將多個字串以空格分隔的方式，寫入一行到檔案。"""
+    with open(filePath, "a") as f:
+        f.write(",".join(lines) + "\n")
+
+
+def writeTitle(filePath, title):
+    """寫入表頭（只需呼叫一次，會直接覆寫舊檔）。"""
+    with open(filePath, "w") as f:
+        f.write(",".join(title) + "\n")
+
+
+def getNameIfo(nsName):
+    """
+    依據名稱關鍵字 (nsName) 找到對應的 Named Selections (面)，
+    返回一個面名稱清單 (namedFace) 和對應的面ID清單 (namedFaceID)。
+    """
+    namedFace = []
+    namedFaceID = []
+    for item in Model.NamedSelections.Children:
+        if nsName in item.Name:
+            namedFace.append(item.Name)
+            namedFaceID.append(item.Location.Ids)
+    return namedFace, namedFaceID
+
+
+def addRF(faceIDs):
+    """
+    新增 Force Reaction，並將其指派到給定的面 ID。
+    回傳建立好的 Force Reaction 物件。
+    """
+    # 新增 Force Reaction
+    FR = Model.Analyses[0].Solution.AddForceReaction()
+    # 設置幾何選擇方式
+    FR.LocationMethod = LocationDefinitionMethod.GeometrySelection
+
+    # 建立幾何選擇並指派給 FR
+    forceSel = ExtAPI.SelectionManager.CreateSelectionInfo(SelectionTypeEnum.GeometryEntities)
+    forceSel.Ids = faceIDs
+    FR.GeometryLocation = forceSel
+
+    return FR
+
+
+def addMR(faceIDs):
+    """
+    新增 Moment Reaction，並將其指派到給定的面 ID。
+    回傳建立好的 Moment Reaction 物件。
+    """
+    # 新增 Moment Reaction
+    MR = Model.Analyses[0].Solution.AddMomentReaction()
+    # 設置幾何選擇方式
+    MR.LocationMethod = LocationDefinitionMethod.GeometrySelection
+
+    # 建立幾何選擇並指派給 MR
+    momentSel = ExtAPI.SelectionManager.CreateSelectionInfo(SelectionTypeEnum.GeometryEntities)
+    momentSel.Ids = faceIDs
+    MR.GeometryLocation = momentSel
+
+    return MR
+
+
+def main():
+    # 輸出 txt 的路徑
+    filePath = r"C:\Users\Chase Wang\Desktop\FANLI.txt"
+
+    # 注意：此處新增三個 moment 的表頭 (X-Moment, Y-Moment, Z-Moment)
+    title = [
+        "namedFace",
+        "Time",
+        "X-Reaction",
+        "Y-Reaction",
+        "Z-Reaction",
+        "X-Moment",
+        "Y-Moment",
+        "Z-Moment"
+    ]
+    writeTitle(filePath, title)
+
+    # 找到含有 "fix" 字串的 Named Selection
+    namedFaces, namedFacesID = getNameIfo("fix")
+
+    # 針對每個面，施加 Reaction Force & Moment 並在 1s 時輸出
+    for faceName, faceIDs in zip(namedFaces, namedFacesID):
+        # 新增 Reaction force 物件
+        FR = addRF(faceIDs)
+        # 新增 Reaction moment 物件
+        MR = addMR(faceIDs)
+
+        # 設置顯示時間(1s)並評估結果
+        FR.DisplayTime = Quantity("1 [s]")
+        FR.EvaluateAllResults()
+
+        MR.DisplayTime = Quantity("1 [s]")
+        MR.EvaluateAllResults()
+
+        # 收集 Force 的 X/Y/Z 分量
+        fx = str(FR.XAxis)
+        fy = str(FR.YAxis)
+        fz = str(FR.ZAxis)
+
+        # 收集 Moment 的 X/Y/Z 分量
+        mx = str(MR.XAxis)
+        my = str(MR.YAxis)
+        mz = str(MR.ZAxis)
+
+        # 寫入檔案 (單行內同時輸出反力與力矩)
+        rowData = [faceName, "1[s]", fx, fy, fz, mx, my, mz]
+        writeListTxt(filePath, rowData)
+
+
+main()
